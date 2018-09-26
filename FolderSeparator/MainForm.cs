@@ -6,11 +6,33 @@ namespace FolderSeparator
 {
     public partial class MainForm : Form
     {
+        private decimal _MaxSize { get; set; }
+
+        private string _BaseDesPath { get; set; }
+
+        private ActionExecutor _actionExecutor = null;
+
+        private ActionExecutor _ActionExecutor
+        {
+            get
+            {
+                if (_actionExecutor == null)
+                {
+                    _actionExecutor = new ActionExecutor();
+                }
+                return _actionExecutor;
+            }
+        }
+
         public MainForm()
         {
             InitializeComponent();
         }
 
+        /// <summary>
+        /// Select a folder
+        /// </summary>
+        /// <returns>Path of selected folder</returns>
         private string SelectFolder()
         {
             using (var fbd = new FolderBrowserDialog())
@@ -39,38 +61,55 @@ namespace FolderSeparator
                 var sourceDirectoryInfo = new DirectoryInfo(txtSourceFolderInfo.Text);
 
                 // Init check veriables
+                _MaxSize = numUpDownSize.Value * 1024 * 1024 * 1024; // (B KB MB) GB
+                _BaseDesPath = txtTargetFolderInfo.Text + "\\" + sourceDirectoryInfo.Name + " - ";
                 var index = 1;
                 long currentSize = 0;
-                var maxSize = numUpDownSize.Value * 1024 * 1024 * 1024; // GB (MB KB B)
-                string baseDesPath = txtTargetFolderInfo.Text + "\\" + sourceDirectoryInfo.Name + " - ";
-                var actionExecutor = new ActionExecutor();
 
-                // Create the folder in target folder
-                var desFodlerInfo = Directory.CreateDirectory(baseDesPath + index);
+                CopyDirectory(sourceDirectoryInfo, ref index, ref currentSize);
 
-                // Check and copy files
-                foreach (var fileInfo in sourceDirectoryInfo.EnumerateFiles())
+                await _ActionExecutor.WaitForFinish();
+                MessageBox.Show("Done");
+            }
+        }
+
+        private void CopyDirectory(DirectoryInfo sourceDirectoryInfo, ref int index, ref long currentSize, string subPath = null)
+        {
+            // Check and copy folders
+            foreach (var dirInfo in sourceDirectoryInfo.EnumerateDirectories())
+            {
+                CopyDirectory(dirInfo, ref index, ref currentSize, subPath + "\\" + dirInfo.Name);
+            }
+
+            // Create the folder in target folder
+            var desFodlerInfo = Directory.CreateDirectory(_BaseDesPath + index + subPath);
+
+            // Check and copy files
+            foreach (var fileInfo in sourceDirectoryInfo.EnumerateFiles())
+            {
+                currentSize += fileInfo.Length;
+                if (currentSize > _MaxSize)
                 {
-                    currentSize += fileInfo.Length;
-                    if (currentSize > maxSize)
-                    {
-                        // The size is going to out of the max
-                        // Reset veriables and create a new folder
-                        currentSize = fileInfo.Length;
-                        index++;
-                        desFodlerInfo = Directory.CreateDirectory(baseDesPath + index);
-                    }
+                    // The size is going to out of the max
+                    // Reset veriables and create a new folder
+                    currentSize = fileInfo.Length;
 
-                    // Copy file
-                    string destFileName = desFodlerInfo.FullName + "\\" + fileInfo.Name;
-                    actionExecutor.AddActionToQueue(() =>
-                    {
-                        fileInfo.CopyTo(destFileName);
-                    });
+                    //// Delete the folder if it doesn't have sub file
+                    //if (desFodlerInfo.GetFileSystemInfos().Length == 0)
+                    //{
+                    //    desFodlerInfo.Delete();
+                    //}
+
+                    index++;
+                    desFodlerInfo = Directory.CreateDirectory(_BaseDesPath + index + subPath);
                 }
 
-                await actionExecutor.WaitForFinish();
-                MessageBox.Show("Done");
+                // Copy file
+                string destFileName = desFodlerInfo.FullName + "\\" + fileInfo.Name;
+                _ActionExecutor.AddActionToQueue(() =>
+                {
+                    fileInfo.CopyTo(destFileName);
+                });
             }
         }
 
