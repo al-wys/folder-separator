@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 
 namespace FolderSeparator
@@ -21,6 +22,20 @@ namespace FolderSeparator
                     _actionExecutor = new ActionExecutor();
                 }
                 return _actionExecutor;
+            }
+        }
+
+        private StringBuilder _bigFilePaths = null;
+
+        private StringBuilder _BigFilePaths
+        {
+            get
+            {
+                if (_bigFilePaths == null)
+                {
+                    _bigFilePaths = new StringBuilder();
+                }
+                return _bigFilePaths;
             }
         }
 
@@ -69,7 +84,16 @@ namespace FolderSeparator
                 CopyDirectory(sourceDirectoryInfo, ref index, ref currentSize);
 
                 await _ActionExecutor.WaitForFinish();
-                MessageBox.Show("Done");
+
+                var msg = new StringBuilder("Done.");
+                if (_bigFilePaths != null)
+                {
+                    msg.AppendLine();
+                    msg.AppendLine("But below files are bigger than your limit:");
+                    msg.AppendLine(_BigFilePaths.ToString());
+                }
+
+                MessageBox.Show(msg.ToString());
             }
         }
 
@@ -102,13 +126,19 @@ namespace FolderSeparator
 
                     index++;
                     desFodlerInfo = Directory.CreateDirectory(_BaseDesPath + index + subPath);
+
+                    if (fileInfo.Length > _MaxSize)
+                    {
+                        // This file is bigger than _MaxSize
+                        _BigFilePaths.AppendLine(desFodlerInfo.FullName + "\\" + fileInfo.Name);
+                    }
                 }
 
                 // Copy file
                 string destFileName = desFodlerInfo.FullName + "\\" + fileInfo.Name;
                 _ActionExecutor.AddActionToQueue(() =>
                 {
-                    fileInfo.CopyTo(destFileName);
+                    fileInfo.CopyTo(destFileName, true);
                 });
             }
         }
