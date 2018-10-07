@@ -7,6 +7,10 @@ namespace FolderSeparator
 {
     public partial class MainForm : Form
     {
+        private bool _SourcePathIsFromDialog { get; set; } = false;
+
+        private Func<string> _GetSourcePathFunc { get; set; }
+
         private decimal _MaxSize { get; set; }
 
         private string _BaseDesPath { get; set; }
@@ -64,16 +68,18 @@ namespace FolderSeparator
 
         private async void btnStart_Click(object sender, EventArgs e)
         {
-            if (!string.IsNullOrEmpty(txtSourceFolderInfo.Text) && !string.IsNullOrEmpty(txtTargetFolderInfo.Text))
+            var sourcePath = _GetSourcePathFunc();
+
+            if (!string.IsNullOrEmpty(sourcePath) && !string.IsNullOrEmpty(txtTargetFolderInfo.Text))
             {
-                if (txtTargetFolderInfo.Text == txtSourceFolderInfo.Text)
+                if (txtTargetFolderInfo.Text == sourcePath)
                 {
                     MessageBox.Show("Plese choose different folder!");
                     return;
                 }
 
                 // Source folder and target folder are both selected, they are different
-                var sourceDirectoryInfo = new DirectoryInfo(txtSourceFolderInfo.Text);
+                var sourceDirectoryInfo = new DirectoryInfo(sourcePath);
 
                 // Init check veriables
                 _MaxSize = numUpDownSize.Value * 1024 * 1024 * 1024; // (B KB MB) GB
@@ -146,11 +152,40 @@ namespace FolderSeparator
         private void txtSourceFolderInfo_DoubleClick(object sender, EventArgs e)
         {
             txtSourceFolderInfo.Text = SelectFolder();
+            _SourcePathIsFromDialog = true;
         }
 
         private void txtTargetFolderInfo_DoubleClick(object sender, EventArgs e)
         {
             txtTargetFolderInfo.Text = SelectFolder();
+        }
+
+        private void txtSourceFolderInfo_TextChanged(object sender, EventArgs e)
+        {
+            if (_SourcePathIsFromDialog)
+            {
+                _GetSourcePathFunc = () => txtSourceFolderInfo.Text;
+            }
+            else
+            {
+                // The sourcePath is input by user
+                _GetSourcePathFunc = () =>
+                {
+                    var sourcePath = txtSourceFolderInfo.Text.Trim();
+                    // Check whether the path exist on disk
+                    if (Directory.Exists(sourcePath))
+                    {
+                        return sourcePath;
+                    }
+                    else
+                    {
+                        MessageBox.Show("Please input an correct path.");
+                        return null;
+                    }
+                };
+            }
+
+            _SourcePathIsFromDialog = false;
         }
     }
 }
